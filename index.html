@@ -2,34 +2,62 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>🏓 Pong Game</title>
     <style>
+        * { touch-action: none; }
         body {
             margin: 0;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
             background: #000;
             font-family: 'Courier New', monospace;
+            overflow: hidden;
         }
         canvas {
             border: 3px solid #fff;
+            max-width: 100vw;
+            max-height: 60vh;
         }
         .score {
-            position: absolute;
-            top: 20px;
             color: #fff;
-            font-size: 32px;
+            font-size: 24px;
             display: flex;
             gap: 100px;
+            margin-bottom: 10px;
         }
-        .controls {
+        .touch-area {
             position: absolute;
-            bottom: 20px;
+            width: 50%;
+            height: 60vh;
+            top: 80px;
+        }
+        .touch-left { left: 0; }
+        .touch-right { right: 0; }
+        .controls {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .btn {
+            width: 100px;
+            height: 100px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid #fff;
+            border-radius: 10px;
+            font-size: 40px;
             color: #fff;
-            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+        }
+        .btn:active { background: rgba(255, 255, 255, 0.5); }
+        @media (min-width: 600px) {
+            .controls { display: none; }
         }
     </style>
 </head>
@@ -38,46 +66,58 @@
         <span id="playerScore">0</span>
         <span id="computerScore">0</span>
     </div>
+    
     <canvas id="game" width="800" height="400"></canvas>
-    <div class="controls">⬆️ ⬇️ Pfeiltasten zum Steuern</div>
+    
+    <div class="controls">
+        <div class="btn" ontouchstart="moveUp()" ontouchend="stopMove()">⬆️</div>
+        <div class="btn" ontouchstart="moveDown()" ontouchend="stopMove()">⬇️</div>
+    </div>
+    
     <script>
         const canvas = document.getElementById('game');
         const ctx = canvas.getContext('2d');
         
-        const ball = {
-            x: canvas.width / 2,
-            y: canvas.height / 2,
-            dx: 5,
-            dy: 5,
-            radius: 10
-        };
+        const ball = { x: canvas.width / 2, y: canvas.height / 2, dx: 5, dy: 5, radius: 10 };
+        const player = { x: 10, y: canvas.height / 2 - 50, width: 15, height: 100, score: 0 };
+        const computer = { x: canvas.width - 25, y: canvas.height / 2 - 50, width: 15, height: 100, score: 0, speed: 4 };
         
-        const player = {
-            x: 10,
-            y: canvas.height / 2 - 50,
-            width: 15,
-            height: 100,
-            score: 0
-        };
+        let playerSpeed = 0;
         
-        const computer = {
-            x: canvas.width - 25,
-            y: canvas.height / 2 - 50,
-            width: 15,
-            height: 100,
-            score: 0,
-            speed: 4
-        };
+        function moveUp() { playerSpeed = -8; }
+        function moveDown() { playerSpeed = 8; }
+        function stopMove() { playerSpeed = 0; }
         
-        const keys = {};
-        
+        // Keyboard
         document.addEventListener('keydown', (e) => {
-            keys[e.key] = true;
+            if (e.key === 'ArrowUp') moveUp();
+            if (e.key === 'ArrowDown') moveDown();
         });
+        document.addEventListener('keyup', stopMove);
         
-        document.addEventListener('keyup', (e) => {
-            keys[e.key] = false;
-        });
+        // Touch on canvas
+        canvas.addEventListener('touchstart', (e) => {
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const y = touch.clientY - rect.top;
+            if (y < canvas.height / 2) moveUp();
+            else moveDown();
+            e.preventDefault();
+        }, {passive: false});
+        
+        canvas.addEventListener('touchend', (e) => {
+            stopMove();
+            e.preventDefault();
+        }, {passive: false});
+        
+        // Touch move on canvas
+        canvas.addEventListener('touchmove', (e) => {
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const y = touch.clientY - rect.top;
+            player.y = y - player.height / 2;
+            e.preventDefault();
+        }, {passive: false});
         
         function resetBall() {
             ball.x = canvas.width / 2;
@@ -87,41 +127,28 @@
         }
         
         function update() {
-            // Player movement
-            if (keys['ArrowUp'] && player.y > 0) player.y -= 8;
-            if (keys['ArrowDown'] && player.y < canvas.height - player.height) player.y += 8;
+            player.y += playerSpeed;
+            if (player.y < 0) player.y = 0;
+            if (player.y > canvas.height - player.height) player.y = canvas.height - player.height;
             
-            // Computer AI
-            if (computer.y + computer.height / 2 < ball.y && computer.y < canvas.height - computer.height) {
-                computer.y += computer.speed;
-            } else if (computer.y + computer.height / 2 > ball.y && computer.y > 0) {
-                computer.y -= computer.speed;
-            }
+            if (computer.y + computer.height / 2 < ball.y) computer.y += computer.speed;
+            else if (computer.y + computer.height / 2 > ball.y) computer.y -= computer.speed;
             
-            // Ball movement
             ball.x += ball.dx;
             ball.y += ball.dy;
             
-            // Wall collision
-            if (ball.y - ball.radius < 0 || ball.y + ball.radius > canvas.height) {
-                ball.dy = -ball.dy;
-            }
+            if (ball.y - ball.radius < 0 || ball.y + ball.radius > canvas.height) ball.dy = -ball.dy;
             
-            // Player collision
             if (ball.x - ball.radius < player.x + player.width &&
                 ball.y > player.y && ball.y < player.y + player.height) {
-                ball.dx = -ball.dx;
-                ball.dx *= 1.05;
+                ball.dx = -ball.dx * 1.05;
             }
             
-            // Computer collision
             if (ball.x + ball.radius > computer.x &&
                 ball.y > computer.y && ball.y < computer.y + computer.height) {
-                ball.dx = -ball.dx;
-                ball.dx *= 1.05;
+                ball.dx = -ball.dx * 1.05;
             }
             
-            // Scoring
             if (ball.x < 0) {
                 computer.score++;
                 document.getElementById('computerScore').textContent = computer.score;
@@ -137,7 +164,6 @@
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Middle line
             ctx.setLineDash([10, 10]);
             ctx.beginPath();
             ctx.moveTo(canvas.width / 2, 0);
@@ -146,15 +172,12 @@
             ctx.stroke();
             ctx.setLineDash([]);
             
-            // Player
             ctx.fillStyle = '#0f0';
             ctx.fillRect(player.x, player.y, player.width, player.height);
             
-            // Computer
             ctx.fillStyle = '#f00';
             ctx.fillRect(computer.x, computer.y, computer.width, computer.height);
             
-            // Ball
             ctx.fillStyle = '#fff';
             ctx.beginPath();
             ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
